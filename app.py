@@ -1,25 +1,38 @@
-from flask import Flask, make_response, request
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
-app = Flask(__name__)
+class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
+    
+    def do_GET(self):
+        if self.path == '/set_cookie':
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html')
+         
+            self.send_header('Set-Cookie', 'my_cookie=cookie_value')
+            self.end_headers()
+            self.wfile.write(b'Cookie is set!')
+        
+        elif self.path == '/get_cookie':
+         
+            cookie_header = self.headers.get('Cookie')
+            if cookie_header:
+                cookie_value = cookie_header.split('=')[1]
+                self.send_response(200)
+                self.send_header('Content-type', 'text/html')
+                self.end_headers()
+                response = f'The value of the cookie is: {cookie_value}'
+            else:
+                self.send_response(200)
+                self.send_header('Content-type', 'text/html')
+                self.end_headers()
+                response = 'No cookie found'
+            self.wfile.write(response.encode())
+        else:
+            self.send_response(404)
+            self.end_headers()
 
-@app.route('/set_cookie')
-def set_cookie():
-    # Create a response object
-    response = make_response("Cookie is set!")
-    
-    # Set a cookie on the response object
-    response.set_cookie('my_cookie', 'cookie_value')
-    
-    # Return the response with the cookie
-    return response
-
-@app.route('/get_cookie')
-def get_cookie():
-    # Retrieve the cookie value from the request
-    cookie_value = request.cookies.get('my_cookie')
-    
-    # Return the cookie value
-    return f'The value of the cookie is: {cookie_value}'
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    server_address = ('', 8000)
+    httpd = HTTPServer(server_address, SimpleHTTPRequestHandler)
+    print("Server started on port 8000...")
+    httpd.serve_forever()

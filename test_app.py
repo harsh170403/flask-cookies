@@ -1,27 +1,45 @@
 import pytest
-from app import app  # Replace 'your_flask_app_filename' with the actual name of your app file.
+import threading
+import time
+from http.server import HTTPServer
+from app import SimpleHTTPRequestHandler  
+import requests 
 
-@pytest.fixture
-def client():
-    with app.test_client() as client:
-        yield client
+SERVER_ADDRESS = ('localhost', 8000)
 
-def test_set_cookie(client):
-    # Send a GET request to the /set_cookie route
-    response = client.get('/set_cookie')
-    
-    # Check if the response has the cookie set
-    assert 'my_cookie' in response.headers['Set-Cookie']
+@pytest.fixture(scope='module')
+def http_server():
+    server = HTTPServer(SERVER_ADDRESS, SimpleHTTPRequestHandler)
+    thread = threading.Thread(target=server.serve_forever)
+    thread.daemon = True
+    thread.start()
+    time.sleep(1)  
+    yield
+    server.shutdown()
+    thread.join()
+
+def test_set_cookie(http_server):
+    url = f'http://{SERVER_ADDRESS[0]}:{SERVER_ADDRESS[1]}/set_cookie'
+    response = requests.get(url)
     assert response.status_code == 200
-    assert b'Cookie is set!' in response.data
+    assert 'Set-Cookie' in response.headers
+    assert response.headers['Set-Cookie'] == 'my_cookie=cookie_value'
 
-def test_get_cookie(client):
-    # First, set the cookie by visiting the /set_cookie route
-    client.get('/set_cookie')
+def test_get_cookie(http_server):
     
-    # Now, get the cookie value by visiting the /get_cookie route
-    response = client.get('/get_cookie')
-    
-    # Check if the correct value is returned
-    assert b'The value of the cookie is: cookie_value' in response.data
+    url = f'http://{SERVER_ADDRESS[0]}:{SERVER_ADDRESS[1]}/set_cookie'
+    response = requests.get(url)
     assert response.status_code == 200
+
+
+    url = f'http://{SERVER_ADDRESS[0]}:{SERVER_ADDRESS[1]}/get_cookie'
+    cookies = {'my_cookie': 'cookie_value'}
+    response = requests.get(url, cookies=cookies)
+    assert response.status_code == 200
+    assert 'The value of the cookie is: cookie_value' in response.text
+
+def test_no_cookie(http_server):
+    url = f'http://{SERVER_ADDRESS[0]}:{SERVER_ADDRESS[1]}/get_cookie'
+    response = requests.get(url)
+    assert response.status_code == 200
+    assert 'No cookie found' in response.text
